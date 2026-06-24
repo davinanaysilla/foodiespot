@@ -18,20 +18,45 @@ class UserHomeScreen extends StatefulWidget {
 class _UserHomeScreenState extends State<UserHomeScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = const [
+  // Tracks which screens have been visited (built) at least once.
+  // Screens are built lazily — only when first visited.
+  final List<bool> _visited = [true, false, false, false];
+
+  static const List<Widget> _screenWidgets = [
     _HomeTab(),
     UserMapScreen(),
     UserFavoritesScreen(),
     UserProfileScreen(),
   ];
 
+  void _onTabTap(int index) {
+    setState(() {
+      _currentIndex = index;
+      _visited[index] = true; // mark as built
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: _screens),
+      body: Stack(
+        children: List.generate(_screenWidgets.length, (i) {
+          // Offstage hides the widget without destroying it.
+          // TickerMode pauses animations for hidden screens.
+          // Only build the widget if it has been visited.
+          if (!_visited[i]) return const SizedBox.shrink();
+          return Offstage(
+            offstage: _currentIndex != i,
+            child: TickerMode(
+              enabled: _currentIndex == i,
+              child: _screenWidgets[i],
+            ),
+          );
+        }),
+      ),
       bottomNavigationBar: MainBottomNav(
         currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
+        onTap: _onTabTap,
       ),
     );
   }
@@ -510,22 +535,23 @@ class _HomeTabState extends State<_HomeTab> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  ...DummyData.restaurants
-                      .map(
-                        (r) => RestaurantCard(
-                          restaurant: r,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  RestaurantDetailScreen(restaurant: r),
-                            ),
-                          ),
-                          onFavorite: () =>
-                              setState(() => r.isFavorited = !r.isFavorited),
+                  // Gunakan ListView non-scrollable di dalam CustomScrollView
+                  // agar card di-render secara lazy (tidak semua sekaligus)
+                  ...List.generate(DummyData.restaurants.length, (idx) {
+                    final r = DummyData.restaurants[idx];
+                    return RestaurantCard(
+                      restaurant: r,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              RestaurantDetailScreen(restaurant: r),
                         ),
-                      )
-                      .toList(),
+                      ),
+                      onFavorite: () =>
+                          setState(() => r.isFavorited = !r.isFavorited),
+                    );
+                  }),
                   const SizedBox(height: 20),
                 ],
               ),

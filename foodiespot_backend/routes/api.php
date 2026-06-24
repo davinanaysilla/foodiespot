@@ -115,8 +115,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/admin/pengajuan/{id}',            [AdminController::class, 'hapusPengajuan']);
 
     // ADMIN – Manajemen User
-    Route::get('/admin/users',         [AdminController::class, 'getAllUsers']);
-    Route::delete('/admin/users/{id}', [AdminController::class, 'deleteUser']);
+    Route::get('/admin/users',              [AdminController::class, 'getAllUsers']);
+    Route::post('/admin/users/{id}/suspend',[AdminController::class, 'suspendUser']);
+    Route::delete('/admin/users/{id}',      [AdminController::class, 'deleteUser']);
 
     // ADMIN – Moderasi Review
     Route::get('/admin/reviews',           [AdminController::class, 'getAllReviews']);

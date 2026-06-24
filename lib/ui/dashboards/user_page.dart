@@ -30,6 +30,10 @@ class _UserHomePageState extends State<UserHomePage> {
   late List<TempatMakanModel> _allData;
   bool _dataLoaded = false;
 
+  // Tracks which tabs have been visited (built) at least once.
+  // Tab 0 (Beranda) is always pre-visited on launch.
+  final List<bool> _visited = [true, false, false, false, false];
+
   @override
   void initState() {
     super.initState();
@@ -46,8 +50,16 @@ class _UserHomePageState extends State<UserHomePage> {
     }
   }
 
+  void _onTabTap(int index) {
+    setState(() {
+      _currentTab = index;
+      _visited[index] = true; // mark tab as built for the first time
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Pages list is built inside build() but only rendered when _visited[i] == true
     final pages = [
       _BerandaPage(allData: _allData, dataLoaded: _dataLoaded, onRefresh: _loadData),
       PetaPage(tempatMakanList: _allData),
@@ -58,7 +70,19 @@ class _UserHomePageState extends State<UserHomePage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F4EE),
-      body: IndexedStack(index: _currentTab, children: pages),
+      body: Stack(
+        children: List.generate(pages.length, (i) {
+          // Don't build the widget at all until it's first visited
+          if (!_visited[i]) return const SizedBox.shrink();
+          return Offstage(
+            offstage: _currentTab != i,
+            child: TickerMode(
+              enabled: _currentTab == i,
+              child: pages[i],
+            ),
+          );
+        }),
+      ),
       bottomNavigationBar: _buildBottomNav(),
     );
   }
@@ -91,7 +115,7 @@ class _UserHomePageState extends State<UserHomePage> {
             children: List.generate(items.length, (i) {
               final active = _currentTab == i;
               return GestureDetector(
-                onTap: () => setState(() => _currentTab = i),
+                onTap: () => _onTabTap(i),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

@@ -58,15 +58,22 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
     _filtered = list;
   }
 
-  Future<void> _deleteUser(Map<String, dynamic> user) async {
+  Future<void> _toggleSuspend(Map<String, dynamic> user) async {
+    final isSuspended = user['is_suspended'] == true;
+    final action = isSuspended ? 'Aktifkan' : 'Tangguhkan';
+    final actionDesc = isSuspended
+        ? 'Akun "${user['name']}" akan diaktifkan kembali dan dapat login.'
+        : 'Akun "${user['name']}" akan ditangguhkan. Pengguna tidak dapat login.';
+    final actionColor = isSuspended ? AppColors.success : AppColors.warning;
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Hapus Pengguna',
+        title: Text('$action Pengguna',
             style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700)),
         content: Text(
-          'Hapus akun "${user['name']}"? Tindakan ini tidak dapat dibatalkan.',
+          actionDesc,
           style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary),
         ),
         actions: [
@@ -77,17 +84,25 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
             onPressed: () async {
               Navigator.pop(ctx);
               try {
-                await _adminService.deleteUser(user['id']);
-                _showSnack('Pengguna "${user['name']}" dihapus', AppColors.textPrimary);
-                _loadUsers();
+                final newStatus = await _adminService.suspendUser(user['id']);
+                // Update locally without full reload
+                setState(() {
+                  final idx = _users.indexWhere((u) => u['id'] == user['id']);
+                  if (idx != -1) _users[idx]['is_suspended'] = newStatus;
+                  _applyFilter();
+                });
+                final resultMsg = newStatus
+                    ? 'Akun "${user['name']}" berhasil ditangguhkan'
+                    : 'Akun "${user['name']}" berhasil diaktifkan kembali';
+                _showSnack(resultMsg, newStatus ? AppColors.warning : AppColors.success);
               } catch (e) {
                 _showSnack(e.toString().replaceAll('Exception: ', ''), AppColors.error);
               }
             },
             style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.error,
+                backgroundColor: actionColor,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            child: Text('Hapus', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600)),
+            child: Text(action, style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -208,23 +223,68 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                     itemBuilder: (context, i) {
                       final user = _filtered[i];
                       final role = user['role'] ?? 'user';
+                      final isSuspended = user['is_suspended'] == true;
                       return Container(
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: isSuspended
+                              ? AppColors.warning.withValues(alpha: 0.04)
+                              : Colors.white,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(
+                            color: isSuspended
+                                ? AppColors.warning.withValues(alpha: 0.4)
+                                : AppColors.border,
+                          ),
                         ),
                         child: ListTile(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          leading: CircleAvatar(
-                            backgroundColor: _roleColor(role).withValues(alpha: 0.12),
-                            child: Text(
-                              (user['name'] ?? 'U').toString().substring(0, 1).toUpperCase(),
-                              style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: _roleColor(role)),
-                            ),
+                          leading: Stack(
+                            children: [
+                              CircleAvatar(
+                                backgroundColor: _roleColor(role).withValues(alpha: 0.12),
+                                child: Text(
+                                  (user['name'] ?? 'U').toString().substring(0, 1).toUpperCase(),
+                                  style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: _roleColor(role)),
+                                ),
+                              ),
+                              if (isSuspended)
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 14,
+                                    height: 14,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.warning,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white, width: 1.5),
+                                    ),
+                                    child: const Icon(Icons.block, color: Colors.white, size: 8),
+                                  ),
+                                ),
+                            ],
                           ),
-                          title: Text(user['name'] ?? '-',
-                              style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                          title: Row(
+                            children: [
+                              Flexible(
+                                child: Text(user['name'] ?? '-',
+                                    style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                                    overflow: TextOverflow.ellipsis),
+                              ),
+                              if (isSuspended) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.warning.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text('SUSPENDED',
+                                      style: GoogleFonts.poppins(fontSize: 8, fontWeight: FontWeight.w700, color: AppColors.warning)),
+                                ),
+                              ],
+                            ],
+                          ),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -243,9 +303,16 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                             ],
                           ),
                           trailing: role != 'admin'
-                              ? IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
-                                  onPressed: () => _deleteUser(user),
+                              ? Tooltip(
+                                  message: isSuspended ? 'Aktifkan Akun' : 'Tangguhkan Akun',
+                                  child: IconButton(
+                                    icon: Icon(
+                                      isSuspended ? Icons.lock_open_outlined : Icons.block_outlined,
+                                      color: isSuspended ? AppColors.success : AppColors.warning,
+                                      size: 22,
+                                    ),
+                                    onPressed: () => _toggleSuspend(user),
+                                  ),
                                 )
                               : null,
                         ),

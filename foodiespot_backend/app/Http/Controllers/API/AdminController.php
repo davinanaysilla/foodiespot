@@ -184,6 +184,42 @@ class AdminController extends Controller
         ], 200);
     }
 
+    // Suspend / Unsuspend user (toggle)
+    public function suspendUser(Request $request, $id)
+    {
+        if (!$this->isAdmin($request)) {
+            return response()->json(['status' => 'error', 'message' => 'Akses ditolak. Anda bukan Admin.'], 403);
+        }
+
+        $user = User::find($id);
+
+        if (!$user) {
+            return response()->json(['status' => 'error', 'message' => 'User tidak ditemukan'], 404);
+        }
+
+        // Tidak boleh mensuspend diri sendiri
+        if ($user->id === $request->user()->id) {
+            return response()->json(['status' => 'error', 'message' => 'Tidak dapat mensuspend akun Anda sendiri.'], 400);
+        }
+
+        // Toggle status suspend
+        $newStatus = !$user->is_suspended;
+        $user->update(['is_suspended' => $newStatus]);
+
+        // Jika disuspend, cabut semua token aktif agar langsung logout
+        if ($newStatus) {
+            $user->tokens()->delete();
+        }
+
+        $action = $newStatus ? 'ditangguhkan' : 'diaktifkan kembali';
+
+        return response()->json([
+            'status'       => 'success',
+            'message'      => "Akun '{$user->name}' berhasil {$action}.",
+            'is_suspended' => $newStatus,
+        ], 200);
+    }
+
     // ======================================================
     // MODERASI REVIEW
     // ======================================================

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
 import '../../services/auth_service.dart';
+import '../../services/notification_service.dart';
+import '../../models/notification_model.dart';
 import '../auth/login_screen.dart';
 import 'admin_dashboard_tab.dart';
 import 'admin_restaurants_tab.dart';
@@ -9,6 +11,7 @@ import 'admin_applications_tab.dart';
 import 'admin_reviews_tab.dart';
 import 'admin_photos_tab.dart';
 import 'admin_users_tab.dart';
+import 'admin_notification_panel.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({Key? key}) : super(key: key);
@@ -39,6 +42,42 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   ];
 
   final _authService = AuthService();
+  final _notifService = NotificationService();
+
+  int _unreadCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUnreadCount();
+  }
+
+  Future<void> _loadUnreadCount() async {
+    try {
+      final List<NotificationModel> notifications =
+          await _notifService.getNotifications();
+      if (!mounted) return;
+      setState(() {
+        _unreadCount = notifications.where((n) => !n.isRead).length;
+      });
+    } catch (_) {}
+  }
+
+  void _openNotifications() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AdminNotificationPanel(
+        onNavigate: (tabIndex) {
+          setState(() => _currentIndex = tabIndex);
+        },
+      ),
+    ).then((_) {
+      // Refresh unread count after panel is closed
+      _loadUnreadCount();
+    });
+  }
 
   void _logout() {
     showDialog(
@@ -117,22 +156,45 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           ],
         ),
         actions: [
+          // Notification bell with unread badge
           IconButton(
             icon: Stack(
+              clipBehavior: Clip.none,
               children: [
                 const Icon(Icons.notifications_outlined, color: Colors.white),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(color: AppColors.star, shape: BoxShape.circle),
+                if (_unreadCount > 0)
+                  Positioned(
+                    right: -4,
+                    top: -4,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                      decoration: const BoxDecoration(
+                          color: AppColors.star, shape: BoxShape.circle),
+                      child: Text(
+                        _unreadCount > 9 ? '9+' : '$_unreadCount',
+                        style: GoogleFonts.poppins(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  )
+                else
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                          color: Colors.transparent, shape: BoxShape.circle),
+                    ),
                   ),
-                ),
               ],
             ),
-            onPressed: () {},
+            onPressed: _openNotifications,
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: Colors.white),

@@ -162,6 +162,28 @@ class AdminService {
     }
   }
 
+  /// Toggle suspend/unsuspend user. Returns the new [is_suspended] value.
+  Future<bool> suspendUser(int id) async {
+    final token = await _getToken();
+    try {
+      final response = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/admin/users/$id/suspend'),
+            headers: _headers(token!),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['is_suspended'] as bool;
+      }
+      final data = json.decode(response.body);
+      throw Exception(data['message'] ?? 'Gagal mengubah status user');
+    } catch (e) {
+      throw Exception(e.toString());
+    }
+  }
+
   // =====================================================
   // MODERASI REVIEW
   // =====================================================
