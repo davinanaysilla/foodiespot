@@ -129,6 +129,46 @@ class _DetailTempatMakanPageState extends State<DetailTempatMakanPage> {
     return '${ApiConfig.baseUrl.replaceAll('/api', '')}/storage/$url';
   }
 
+  // Avatar dengan fallback ke inisial jika gambar gagal load
+  Widget _buildUserAvatar(ReviewModel review) {
+    final photoUrl = _resolveImageUrl(review.userPhotoUrl);
+    final initial = review.userName.isNotEmpty
+        ? review.userName[0].toUpperCase()
+        : 'U';
+
+    if (photoUrl.isEmpty) {
+      return CircleAvatar(
+        radius: 20,
+        backgroundColor: _primaryBrown.withValues(alpha: 0.15),
+        child: Text(initial,
+            style: const TextStyle(
+                color: _primaryBrown, fontWeight: FontWeight.bold)),
+      );
+    }
+
+    return CircleAvatar(
+      radius: 20,
+      backgroundColor: _borderColor,
+      child: ClipOval(
+        child: Image.network(
+          photoUrl,
+          width: 40,
+          height: 40,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            width: 40,
+            height: 40,
+            color: _primaryBrown.withValues(alpha: 0.15),
+            alignment: Alignment.center,
+            child: Text(initial,
+                style: const TextStyle(
+                    color: _primaryBrown, fontWeight: FontWeight.bold)),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openNavigation() async {
     if (widget.tempatMakan.latitude == null ||
         widget.tempatMakan.longitude == null) {
@@ -716,30 +756,7 @@ class _DetailTempatMakanPageState extends State<DetailTempatMakanPage> {
                               children: [
                                 Row(
                                   children: [
-                                    CircleAvatar(
-                                      radius: 20,
-                                      backgroundColor: _borderColor,
-                                      backgroundImage:
-                                          review.userPhotoUrl != null
-                                          ? NetworkImage(
-                                              _resolveImageUrl(
-                                                review.userPhotoUrl!,
-                                              ),
-                                            )
-                                          : null,
-                                      child: review.userPhotoUrl == null
-                                          ? Text(
-                                              review.userName.isNotEmpty
-                                                  ? review.userName[0]
-                                                        .toUpperCase()
-                                                  : 'U',
-                                              style: const TextStyle(
-                                                color: _textDark,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            )
-                                          : null,
-                                    ),
+                                    _buildUserAvatar(review),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
@@ -799,6 +816,22 @@ class _DetailTempatMakanPageState extends State<DetailTempatMakanPage> {
                                       height: 120,
                                       width: double.infinity,
                                       fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                          Container(
+                                            height: 120,
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFEAE0D5),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                            child: const Center(
+                                              child: Icon(
+                                                Icons.image_not_supported_outlined,
+                                                color: Color(0xFF8B5E2A),
+                                                size: 36,
+                                              ),
+                                            ),
+                                          ),
                                     ),
                                   ),
                                 ],

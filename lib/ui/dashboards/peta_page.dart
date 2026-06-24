@@ -26,6 +26,8 @@ class _PetaPageState extends State<PetaPage> with TickerProviderStateMixin {
   TempatMakanModel? _selectedPlace;
   bool _isLoadingLocation = false; // peta langsung tampil, GPS background
   bool _gpsActive = false;         // true jika GPS berhasil
+  bool _hasCenteredOnUser = false; // agar kamera hanya auto-move sekali ke lokasi user
+  bool _mapReady = false;          // true setelah FlutterMap selesai di-build
   int _selectedCardIndex = -1;
   StreamSubscription<Position>? _locationStream;
 
@@ -49,9 +51,8 @@ class _PetaPageState extends State<PetaPage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    // Langsung set ke Jakarta dulu, GPS dicari di background
-    _userLocation = _defaultCenter;
-    _initLocation();
+    // Jangan paksa Jakarta — biarkan GPS tentukan lokasi awal
+    // _initLocation() dipanggil setelah map ready via onMapReady
   }
 
   @override
@@ -86,7 +87,11 @@ class _PetaPageState extends State<PetaPage> with TickerProviderStateMixin {
             _userLocation = loc;
             _gpsActive = true;
           });
-          _mapController.move(loc, 15.0);
+          // Pindahkan kamera hanya jika map sudah ready
+          if (_mapReady && !_hasCenteredOnUser) {
+            _hasCenteredOnUser = true;
+            _mapController.move(loc, 15.0);
+          }
         }
       } catch (_) {}
 
@@ -103,6 +108,12 @@ class _PetaPageState extends State<PetaPage> with TickerProviderStateMixin {
           _userLocation = loc;
           _gpsActive = true;
         });
+        // Pindahkan kamera ke lokasi user hanya pertama kali GPS berhasil
+        // dan hanya setelah map sudah siap
+        if (_mapReady && !_hasCenteredOnUser) {
+          _hasCenteredOnUser = true;
+          _mapController.move(loc, 15.0);
+        }
       }, onError: (_) {
         // Diam saja jika stream error, peta tetap tampil
       });
@@ -278,6 +289,13 @@ class _PetaPageState extends State<PetaPage> with TickerProviderStateMixin {
           .where((p) => p.latitude != null && p.longitude != null)
           .toList();
 
+  // ─── CALLBACK SAAT PETA SIAP ─────────────────────────────────────────────
+  void _onMapReady() {
+    _mapReady = true;
+    // Mulai cari lokasi GPS setelah peta benar-benar siap
+    _initLocation();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -288,10 +306,11 @@ class _PetaPageState extends State<PetaPage> with TickerProviderStateMixin {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: _userLocation ?? _defaultCenter,
+              initialCenter: _defaultCenter, // Sementara Jakarta, GPS akan override
               initialZoom: 14.0,
               minZoom: 5,
               maxZoom: 19,
+              onMapReady: _onMapReady, // Dipanggil saat map siap, baru cari GPS
               onTap: (_, __) {
                 setState(() {
                   _selectedPlace = null;
@@ -300,11 +319,14 @@ class _PetaPageState extends State<PetaPage> with TickerProviderStateMixin {
               },
             ),
             children: [
-              // Tile Layer OpenStreetMap
+              // Tile Layer — Carto Voyager (lebih permisif, tampilan modern)
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.foodiespot.app',
+                urlTemplate:
+                    'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                subdomains: const ['a', 'b', 'c', 'd'],
+                userAgentPackageName: 'com.example.foodiespot',
                 maxZoom: 19,
+                maxNativeZoom: 18,
               ),
 
               // ── RUTE POLYLINE ────────────────────────────────────────
